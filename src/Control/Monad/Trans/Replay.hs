@@ -14,13 +14,14 @@
 -- Stability   : experimental
 -- Portability : GHC
 --
--- Logging is done using the 'logged' combinator. It remembers the last value
--- returned by a given computation and replays it the next time the computation
--- is resumed. However this could be problematic if we do not annotate all
--- impure computations. The program can take a different path due to a
--- non-logged computation returning a different value. In that case we may
--- replay a wrong value. To detect this we can use a unique id for each logging
--- site and abort if the id does not match on replay.
+-- Results of the 'ReplayT' computations are logged using the 'logged'
+-- combinator. A computation can be suspended at any point using the 'suspend'
+-- primitive returning the logs which can be used to restart the computation
+-- later. When logs are replayed using 'replay' the 'logged' combinator returns
+-- the results of the previously logged computations from the log journal. Note
+-- that only those computations are replayed that are explicitly logged.
+-- Unlogged impure computations can result in the program misbehaving if it
+-- takes a different path upon replay.
 
 module Control.Monad.Trans.Replay
     ( ReplayT
@@ -28,6 +29,7 @@ module Control.Monad.Trans.Replay
     , replay
     , Loggable (..)
     , Journal
+    , LogState
     , emptyJournal
     , logged
     , Suspended (..)
@@ -73,10 +75,11 @@ data LogEntry =
 -- | The log entries returned when an action is 'suspend'ed.
 data Journal = Journal [LogEntry] deriving (Eq, Show)
 
+-- | Create an empty log 'Journal'.
 emptyJournal :: Journal
 emptyJournal = Journal []
 
--- log entries and replay entries
+-- | The internal log state kept when logging or replaying.
 data LogState = LogState [LogEntry] [LogEntry] deriving (Read, Show)
 
 ------------------------------------------------------------------------------
