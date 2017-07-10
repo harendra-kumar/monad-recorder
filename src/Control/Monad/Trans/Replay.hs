@@ -24,7 +24,7 @@
 -- takes a different path upon replay.
 
 module Control.Monad.Trans.Replay
-    ( ReplayT
+    ( ReplayT (..)
     , MonadReplay (..)
     , replay
     , Loggable (..)
@@ -33,6 +33,7 @@ module Control.Monad.Trans.Replay
     , emptyJournal
     , logged
     , Suspended (..)
+    , pause
     , suspend
     )
 where
@@ -162,10 +163,8 @@ logged m = do
 data Suspended = Suspended Journal deriving Show
 instance Exception Suspended
 
--- | Suspend a computation before completion for resuming later using 'replay'.
--- Throws 'Suspended' exception which carries the current logs.
-suspend :: (MonadReplay m, MonadThrow m) => m ()
-suspend = logged $ do
+pause :: (MonadReplay m, MonadThrow m) => m ()
+pause = do
     logs <- getLog
     let enable = True
     case enable of
@@ -179,6 +178,11 @@ suspend = logged $ do
                            $ Journal (logResult () : tail ls)
                 _ -> error "Bug: replay inside suspend"
     where logResult x = Result (show x)
+
+-- | Suspend a computation before completion for resuming later using 'replay'.
+-- Throws 'Suspended' exception which carries the current logs.
+suspend :: (MonadReplay m, MonadThrow m) => m ()
+suspend = logged pause
 
 ------------------------------------------------------------------------------
 -- Running the monad
