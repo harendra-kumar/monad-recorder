@@ -31,10 +31,9 @@ module Control.Monad.Trans.Replay
     , Journal
     , LogState
     , emptyJournal
-    , logged
-    , Suspended (..)
+    , record
+    , Paused (..)
     , pause
-    , suspend
     )
 where
 
@@ -127,8 +126,8 @@ instance Monad m => MonadReplay (ReplayT m) where
 -- | Add the result of an action to the running log journal.  When replaying,
 -- if the result of an action is available in the replay journal then get it
 -- from the journal instead of running the action.
-logged :: (Loggable a, Read a, Show a, MonadReplay m) => m a -> m a
-logged m = do
+record :: (Loggable a, Read a, Show a, MonadReplay m) => m a -> m a
+record m = do
     let enable = True
     logs <- getLog
     case logs of
@@ -160,9 +159,11 @@ logged m = do
         return x
 
 -- | Exception thrown when 'suspend' is called.
-data Suspended = Suspended Journal deriving Show
-instance Exception Suspended
+data Paused = Paused Journal deriving Show
+instance Exception Paused
 
+-- | Suspend a computation before completion for resuming later using 'replay'.
+-- Throws 'Paused' exception which carries the current logs.
 pause :: (MonadReplay m, MonadThrow m) => m ()
 pause = do
     logs <- getLog
@@ -174,15 +175,10 @@ pause = do
                 LogState ls [] -> do
                     -- replace the "Executing" entry at the head of the log
                     -- with a "()" so that we do not enter suspend on replay
-                    throwM $ Suspended
+                    throwM $ Paused
                            $ Journal (logResult () : tail ls)
                 _ -> error "Bug: replay inside suspend"
     where logResult x = Result (show x)
-
--- | Suspend a computation before completion for resuming later using 'replay'.
--- Throws 'Suspended' exception which carries the current logs.
-suspend :: (MonadReplay m, MonadThrow m) => m ()
-suspend = logged pause
 
 ------------------------------------------------------------------------------
 -- Running the monad

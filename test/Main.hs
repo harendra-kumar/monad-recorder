@@ -26,27 +26,29 @@ main = do
     runOnce journal m = do
         res <- try $ replay journal m
         case res of
-            Left (Suspended j) -> do
+            Left (Paused j) -> do
                 putStrLn $ "suspended: " ++ show j
                 return j
             Right r -> do
                 putStrLn $ "done: " ++ show r
                 return emptyJournal
 
-    explicit = logged $ do
-         r <- logged $ liftIO $ return 2
-         logged $ liftIO $ print ("A",r)
-         suspend
-         logged $ liftIO $ print ("B",r)
+    explicit = record $ do
+         r <- record $ liftIO $ return 2
+         record $ liftIO $ print ("A",r)
+         record pause
+         record $ liftIO $ print ("B",r)
          x <- liftIO $ return 3
-         suspend
+         record pause
          liftIO $ print ("C", r, x)
 
-    auto = unEmbed $ do
-         r <- Embed $ ReplayT $ liftIO $ return 2
-         Embed $ ReplayT $ liftIO $ print ("A",r)
-         Embed $ pause
-         Embed $ ReplayT $ liftIO $ print ("B",r)
-         x <- Embed $ ReplayT $ liftIO $ return 3
-         Embed $ pause
-         Embed $ ReplayT $ liftIO $ print ("C", r, x)
+    auto = do
+        recorder $ do
+            r <- return 2
+            R $ liftIO $ print ("A",r)
+            R $ pause
+            R $ liftIO $ print ("B",r)
+            x <- return 3
+            R $ pause
+            R $ liftIO $ print ("C", r, x)
+        record $ liftIO $ print ("X")

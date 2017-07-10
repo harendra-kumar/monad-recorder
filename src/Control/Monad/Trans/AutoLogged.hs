@@ -2,10 +2,11 @@
 
 module Control.Monad.Trans.AutoLogged
     ( AutoReplayT (..)
-    , unEmbed
+    , recorder
     )
 where
 
+import Control.Monad.Catch (MonadThrow)
 import Control.Monad.Trans.Replay
 
 ------------------------------------------------------------------------------
@@ -13,11 +14,11 @@ import Control.Monad.Trans.Replay
 ------------------------------------------------------------------------------
 
 data AutoReplayT m a where
-    Embed  :: (Show a, Read a) => ReplayT m a -> AutoReplayT m a
-    Return :: a -> AutoReplayT m a
-    Bind   :: AutoReplayT m a -> (a -> AutoReplayT m b) -> AutoReplayT m b
+    R  :: (Show a, Read a) => m a -> AutoReplayT m a
     FMap   :: (a -> b) -> AutoReplayT m a -> AutoReplayT m b
+    Return :: a -> AutoReplayT m a
     Apply  :: AutoReplayT m (a -> b) -> AutoReplayT m a -> AutoReplayT m b
+    Bind   :: AutoReplayT m a -> (a -> AutoReplayT m b) -> AutoReplayT m b
 
 instance Functor (AutoReplayT f) where
     fmap = FMap
@@ -31,47 +32,48 @@ instance Monad (AutoReplayT m) where
     (>>=) = Bind
 
 -- Only bind is logged, return is not logged
-bind :: (Monad m, Read a, Show a)
-    => ReplayT m a -> (a -> ReplayT m b) -> ReplayT m b
-bind m f = logged m >>= f
+bind :: (MonadReplay m, Read a, Show a)
+    => m a -> (a -> m b) -> m b
+bind m f = record m >>= f
 
-unEmbed :: (Monad m, Show a, Read a) => AutoReplayT m a -> ReplayT m a
+recorder :: (MonadReplay m, MonadThrow m, Show a, Read a)
+    => AutoReplayT m a -> m a
 
-unEmbed (Embed m) = m
-unEmbed (Return v) = return v
+recorder (R m) = m
+recorder (Return v) = return v
 
-unEmbed (Bind (Embed m) f)     = m `bind` (unEmbed . f)
-unEmbed (Bind (Return v) f)    = unEmbed (f v)
-unEmbed (Bind (Bind m f) g)    = unEmbed (Bind m (\x -> Bind (f x) g))
-unEmbed (Bind (FMap f m1) g)   = unEmbed (Bind m1 (g . f))
-unEmbed (Bind (Apply m1 m2) g) =
-    unEmbed (Bind (Bind m1 (\x -> Bind m2 (\y -> Return (x y)))) g)
+recorder (Bind (R m) f)     = m `bind` (recorder . f)
+recorder (Bind (Return v) f)    = recorder (f v)
+recorder (Bind (Bind m f) g)    = recorder (Bind m (\x -> Bind (f x) g))
+recorder (Bind (FMap f m1) g)   = recorder (Bind m1 (g . f))
+recorder (Bind (Apply m1 m2) g) =
+    recorder (Bind (Bind m1 (\x -> Bind m2 (\y -> Return (x y)))) g)
 
-unEmbed (FMap f (Embed m))     = fmap f m
-unEmbed (FMap f (Return a))    = unEmbed (Return (f a))
-unEmbed (FMap f (Bind m g))    = unEmbed (Bind m (FMap f . g))
-unEmbed (FMap f (FMap g m))    = unEmbed (FMap (f . g) m)
-unEmbed (FMap f (Apply m1 m2)) =
-    unEmbed (FMap f (Bind m1 (\x -> Bind m2 (\y -> Return (x y)))))
+recorder (FMap f (R m))     = fmap f m
+recorder (FMap f (Return a))    = recorder (Return (f a))
+recorder (FMap f (Bind m g))    = recorder (Bind m (FMap f . g))
+recorder (FMap f (FMap g m))    = recorder (FMap (f . g) m)
+recorder (FMap f (Apply m1 m2)) =
+    recorder (FMap f (Bind m1 (\x -> Bind m2 (\y -> Return (x y)))))
 
-unEmbed (Apply (Embed m1) (Embed m2))    = m1 <*> m2
-unEmbed (Apply (Embed m1) (Return a))    = m1 `bind` (\f -> return (f a))
-unEmbed (Apply (Embed m1) (Bind m2 g))   =
-    m1 `bind` (\f -> unEmbed (FMap f (Bind m2 g)))
+recorder (Apply (R m1) (R m2))    = m1 <*> m2
+recorder (Apply (R m1) (Return a))    = m1 `bind` (\f -> return (f a))
+recorder (Apply (R m1) (Bind m2 g))   =
+    m1 `bind` (\f -> recorder (FMap f (Bind m2 g)))
 
-unEmbed (Apply (Embed m1) (FMap g m2))   =
-    m1 `bind` (\f -> unEmbed (FMap f (FMap g m2)))
+recorder (Apply (R m1) (FMap g m2))   =
+    m1 `bind` (\f -> recorder (FMap f (FMap g m2)))
 
-unEmbed (Apply (Embed m1) (Apply m2 m3)) =
-    m1 `bind` (\f -> unEmbed (FMap f (Apply m2 m3)))
+recorder (Apply (R m1) (Apply m2 m3)) =
+    m1 `bind` (\f -> recorder (FMap f (Apply m2 m3)))
 
-unEmbed (Apply (Return f) (Embed m))     = m `bind` (return . f)
-unEmbed (Apply (Return f) (Return x))    = return (f x)
-unEmbed (Apply (Return f) (Bind m g))    = unEmbed (FMap f (Bind m g))
-unEmbed (Apply (Return f) (FMap g m))    = unEmbed (FMap f (FMap g m))
-unEmbed (Apply (Return f) (Apply m1 m2)) = unEmbed (FMap f (Apply m1 m2))
+recorder (Apply (Return f) (R m))     = m `bind` (return . f)
+recorder (Apply (Return f) (Return x))    = return (f x)
+recorder (Apply (Return f) (Bind m g))    = recorder (FMap f (Bind m g))
+recorder (Apply (Return f) (FMap g m))    = recorder (FMap f (FMap g m))
+recorder (Apply (Return f) (Apply m1 m2)) = recorder (FMap f (Apply m1 m2))
 
 -- FMap, Apply and Bind as the first argument of an Apply
-unEmbed (Apply _ _) = error "This applicative operation is not supported \
+recorder (Apply _ _) = error "This applicative operation is not supported \
     \because it requires the result of a monadic action to be a function \
     \which is not serializable."
