@@ -3,8 +3,9 @@ version:             0.1.0
 synopsis:            Record and replay the results of monadic actions
 description:         A monad transformer and class that allows recording
                      the results of monadic actions and replay them later.
-                     Inspired by the original implementation in the transient
+                     Inspired by the logging implementation in the transient
                      package by Alberto G. Corona. Related packages:
+                     .
                      * https://hackage.haskell.org/package/transient
                      * https://hackage.haskell.org/package/Workflow
 homepage:            http://github.com/harendra-kumar/monad-recorder
