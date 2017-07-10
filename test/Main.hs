@@ -11,6 +11,7 @@ main :: IO ()
 main = do
     hSetBuffering stdout LineBuffering
     runAll explicit
+    putStrLn ""
     runAll auto
 
     where
