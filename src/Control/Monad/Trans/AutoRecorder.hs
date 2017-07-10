@@ -1,13 +1,13 @@
 {-# LANGUAGE GADTs                      #-}
 
-module Control.Monad.Trans.AutoLogged
+module Control.Monad.Trans.AutoRecorder
     ( AutoRecorderT (R)
     , recorder
     )
 where
 
 import Control.Monad.Catch (MonadThrow)
-import Control.Monad.Trans.Replay
+import Control.Monad.Trans.Recorder
 
 ------------------------------------------------------------------------------
 -- Constrained monad allowing automatic logging in bind operation

@@ -1,14 +1,14 @@
-name:                monad-replay
+name:                monad-recorder
 version:             0.1.0
-synopsis:            Log and replay the results of monadic actions
-description:         A monad transformer and class that allows capturing
+synopsis:            Record and replay the results of monadic actions
+description:         A monad transformer and class that allows recording
                      the results of monadic actions and replay them later.
                      Inspired by the original implementation in the transient
                      package by Alberto G. Corona. Related packages:
                      * https://hackage.haskell.org/package/transient
                      * https://hackage.haskell.org/package/Workflow
-homepage:            http://github.com/harendra-kumar/replay
-bug-reports:         https://github.com/harendra-kumar/replay/issues
+homepage:            http://github.com/harendra-kumar/monad-recorder
+bug-reports:         https://github.com/harendra-kumar/monad-recorder/issues
 license:             MIT
 license-file:        LICENSE
 author:              Harendra Kumar
@@ -26,8 +26,8 @@ extra-source-files:
 
 library
     hs-source-dirs:   src
-    exposed-modules:    Control.Monad.Trans.Replay
-                      , Control.Monad.Trans.AutoLogged
+    exposed-modules:    Control.Monad.Trans.Recorder
+                      , Control.Monad.Trans.AutoRecorder
 
     default-language: Haskell2010
     ghc-options:      -Wall -fwarn-identities -fwarn-incomplete-record-updates
@@ -49,9 +49,9 @@ test-suite test
   build-depends:
       base       >= 4.7 && < 5
     , hspec      >= 2.0 && < 3
-    , monad-replay
+    , monad-recorder
   default-language: Haskell2010
 
 source-repository head
     type: git
-    location: https://github.com/harendra-kumar/monad-replay
+    location: https://github.com/harendra-kumar/monad-recorder

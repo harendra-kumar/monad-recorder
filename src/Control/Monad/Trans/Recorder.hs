@@ -6,7 +6,7 @@
 {-# LANGUAGE UndecidableInstances       #-}
 
 -- |
--- Module      : Replay
+-- Module      : Recorder
 -- Copyright   : (c) 2017 Harendra Kumar
 --
 -- License     : MIT-style
@@ -27,7 +27,7 @@
 -- can enforce recording of each and every operation using the 'AutoRecorder'
 -- module.
 
-module Control.Monad.Trans.Replay
+module Control.Monad.Trans.Recorder
     ( RecorderT (..)
     , Journal
     , MonadRecorder (..)

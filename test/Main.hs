@@ -4,8 +4,8 @@ import Control.Monad.IO.Class (liftIO)
 import System.IO
 import Control.Exception
 
-import Control.Monad.Trans.Replay
-import Control.Monad.Trans.AutoLogged
+import Control.Monad.Trans.Recorder
+import Control.Monad.Trans.AutoRecorder
 
 main :: IO ()
 main = do
