@@ -14,23 +14,27 @@
 -- Stability   : experimental
 -- Portability : GHC
 --
--- Results of the 'ReplayT' computations are logged using the 'logged'
--- combinator. A computation can be suspended at any point using the 'suspend'
--- primitive returning the logs which can be used to restart the computation
--- later. When logs are replayed using 'replay' the 'logged' combinator returns
--- the results of the previously logged computations from the log journal. Note
--- that only those computations are replayed that are explicitly logged.
--- Unlogged impure computations can result in the program misbehaving if it
--- takes a different path upon replay.
+-- Results of the 'RecorderT' computations are recorded in a running journal
+-- using the 'record' combinator. A computation can be suspended at any point
+-- using the 'pause' primitive returning the journal that can be used to
+-- restart the computation from the same point later. When logs are replayed
+-- using 'play', the 'record' combinator returns the previously recorded result
+-- of the computation from the journal.
+--
+-- Note that only those computations are replayed that are explicitly recorded.
+-- Unrecorded impure computations can result in the program misbehaving if it
+-- takes a different path upon replay.  Instead of recording selectively you
+-- can enforce recording of each and every operation using the 'AutoRecorder'
+-- module.
 
 module Control.Monad.Trans.Replay
-    ( ReplayT (..)
-    , MonadReplay (..)
-    , replay
-    , Loggable (..)
+    ( RecorderT (..)
     , Journal
-    , LogState
-    , emptyJournal
+    , MonadRecorder (..)
+    , play
+    , Recordable (..)
+    , Recording
+    , blank
     , record
     , Paused (..)
     , pause
@@ -51,17 +55,17 @@ import           Control.Monad.Trans.Control (ComposeSt, MonadBaseControl (..),
                                               defaultRestoreT)
 
 ------------------------------------------------------------------------------
--- Loggable
+-- Recordable
 ------------------------------------------------------------------------------
 
--- | A type that can be logged.
-class Loggable a where
-    toLog :: a -> String
-    fromLog :: String -> a
+-- | A type that can be recorded.
+class Recordable a where
+    toJournal :: a -> String
+    fromJournal :: String -> a
 
-instance (Show a, Read a) => Loggable a where
-    toLog = show
-    fromLog = read
+instance (Show a, Read a) => Recordable a where
+    toJournal = show
+    fromJournal = read
 
 ------------------------------------------------------------------------------
 -- The journal
@@ -73,51 +77,51 @@ data LogEntry =
     deriving (Eq, Read, Show)
 
 -- | The log entries returned when an action is 'suspend'ed.
-data Journal = Journal [LogEntry] deriving (Eq, Show)
+data Recording = Recording [LogEntry] deriving (Eq, Show)
 
--- | Create an empty log 'Journal'.
-emptyJournal :: Journal
-emptyJournal = Journal []
+-- | An empty 'Recording'.
+blank :: Recording
+blank = Recording []
 
--- | The internal log state kept when logging or replaying.
-data LogState = LogState [LogEntry] [LogEntry] deriving (Read, Show)
+-- | The internal log state kept when recording or replaying.
+data Journal = Journal [LogEntry] [LogEntry] deriving (Read, Show)
 
 ------------------------------------------------------------------------------
--- The ReplayT transformer
+-- The RecorderT transformer
 ------------------------------------------------------------------------------
 
--- | The monad log and replay transformer. Maintains a running log of the
+-- | The monad record and play transformer. Maintains a running log of the
 -- results of monadic actions.
-newtype ReplayT m a = ReplayT { unReplayT :: StateT LogState m a }
+newtype RecorderT m a = RecorderT { unRecorderT :: StateT Journal m a }
     deriving ( Functor, Applicative, Monad                  -- monad
              , MonadIO, MonadTrans                          -- transformer
              , MonadThrow, MonadCatch, MonadMask            -- exceptions
              )
 
-deriving instance (MonadBase b m) => MonadBase b (ReplayT m)
+deriving instance (MonadBase b m) => MonadBase b (RecorderT m)
 
-instance MonadTransControl ReplayT where
-    type StT ReplayT a = StT (StateT LogState) a
-    liftWith             = defaultLiftWith ReplayT unReplayT
-    restoreT             = defaultRestoreT ReplayT
+instance MonadTransControl RecorderT where
+    type StT RecorderT a = StT (StateT Journal) a
+    liftWith             = defaultLiftWith RecorderT unRecorderT
+    restoreT             = defaultRestoreT RecorderT
 
-instance MonadBaseControl b m => MonadBaseControl b (ReplayT m) where
-    type StM (ReplayT m) a = ComposeSt ReplayT m a
+instance MonadBaseControl b m => MonadBaseControl b (RecorderT m) where
+    type StM (RecorderT m) a = ComposeSt RecorderT m a
     liftBaseWith           = defaultLiftBaseWith
     restoreM               = defaultRestoreM
 
 ------------------------------------------------------------------------------
--- The MonadReplay class
+-- The MonadRecorder class
 ------------------------------------------------------------------------------
 
--- | A monad with the ability to log and replay the results of monadic actions.
-class Monad m => MonadReplay m where
-    getLog :: m LogState
-    putLog :: LogState -> m ()
+-- | A monad with the ability to record and play the results of monadic actions.
+class Monad m => MonadRecorder m where
+    getJournal :: m Journal
+    putJournal :: Journal -> m ()
 
-instance Monad m => MonadReplay (ReplayT m) where
-    getLog = ReplayT $ get
-    putLog logs = ReplayT $ put logs
+instance Monad m => MonadRecorder (RecorderT m) where
+    getJournal = RecorderT $ get
+    putJournal logs = RecorderT $ put logs
 
 ------------------------------------------------------------------------------
 -- Logging
@@ -126,57 +130,57 @@ instance Monad m => MonadReplay (ReplayT m) where
 -- | Add the result of an action to the running log journal.  When replaying,
 -- if the result of an action is available in the replay journal then get it
 -- from the journal instead of running the action.
-record :: (Loggable a, Read a, Show a, MonadReplay m) => m a -> m a
+record :: (Recordable a, Read a, Show a, MonadRecorder m) => m a -> m a
 record m = do
     let enable = True
-    logs <- getLog
+    logs <- getJournal
     case logs of
         -- no replay
-        LogState ls [] ->
+        Journal ls [] ->
             case enable of
                 False -> m
                 True -> do
-                    putLog $ LogState (Executing : ls) []
+                    putJournal $ Journal (Executing : ls) []
                     runAndLogResult m
 
         -- replaying the log
-        LogState ls (r:rs) -> do
+        Journal ls (r:rs) -> do
             case r of
                 Executing -> do
-                    putLog $ LogState (r : ls) rs
+                    putJournal $ Journal (r : ls) rs
                     runAndLogResult m
                 Result val -> do
-                    let x = fromLog val
-                    putLog $ LogState (r : ls) rs
+                    let x = fromJournal val
+                    putJournal $ Journal (r : ls) rs
                     return x
     where
 
     runAndLogResult action = do
         x <- action
         -- replace the head of the log with the result
-        LogState (_ : ls) _ <- getLog
-        putLog $ LogState (Result (toLog x) : ls) []
+        Journal (_ : ls) _ <- getJournal
+        putJournal $ Journal (Result (toJournal x) : ls) []
         return x
 
--- | Exception thrown when 'suspend' is called.
-data Paused = Paused Journal deriving Show
+-- | Exception thrown when 'pause' is called.
+data Paused = Paused Recording deriving Show
 instance Exception Paused
 
--- | Suspend a computation before completion for resuming later using 'replay'.
--- Throws 'Paused' exception which carries the current logs.
-pause :: (MonadReplay m, MonadThrow m) => m ()
+-- | Pause a computation before completion for resuming later using 'play'.
+-- Throws 'Paused' exception which carries the current recorded logs.
+pause :: (MonadRecorder m, MonadThrow m) => m ()
 pause = do
-    logs <- getLog
+    logs <- getJournal
     let enable = True
     case enable of
         False -> return ()
         True ->
             case logs of
-                LogState ls [] -> do
+                Journal ls [] -> do
                     -- replace the "Executing" entry at the head of the log
                     -- with a "()" so that we do not enter suspend on replay
                     throwM $ Paused
-                           $ Journal (logResult () : tail ls)
+                           $ Recording (logResult () : tail ls)
                 _ -> error "Bug: replay inside suspend"
     where logResult x = Result (show x)
 
@@ -184,10 +188,10 @@ pause = do
 -- Running the monad
 ------------------------------------------------------------------------------
 
--- | Run a fresh 'ReplayT' computation using 'emptyJournal' logs or resume a
--- suspended computation using previously captured logs.  The previous state of
--- the action is restored and the action resumes after the 'suspend' call that
--- collected the logs.
-replay :: Monad m => Journal -> ReplayT m a -> m a
-replay (Journal entries) m =
-    runStateT (unReplayT m) (LogState [] (reverse entries)) >>= return . fst
+-- | Run a fresh 'RecorderT' computation using 'blank' recording or resume a
+-- paused computation using captured recording.  The previous state of the
+-- action is restored and the action resumes after the 'pause' call that paused
+-- the action.
+play :: Monad m => Recording -> RecorderT m a -> m a
+play (Recording entries) m =
+    runStateT (unRecorderT m) (Journal [] (reverse entries)) >>= return . fst

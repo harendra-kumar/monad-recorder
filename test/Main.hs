@@ -17,21 +17,21 @@ main = do
     where
 
     runAll m = do
-        j1 <- runOnce emptyJournal m
-        j2 <- runOnce j1 m
-        j3 <- runOnce j2 m
-        assert (j3 == emptyJournal) (return ())
+        r1 <- runOnce blank m
+        r2 <- runOnce r1 m
+        r3 <- runOnce r2 m
+        assert (r3 == blank) (return ())
         return ()
 
-    runOnce journal m = do
-        res <- try $ replay journal m
+    runOnce recording m = do
+        res <- try $ play recording m
         case res of
-            Left (Paused j) -> do
-                putStrLn $ "suspended: " ++ show j
-                return j
+            Left (Paused r) -> do
+                putStrLn $ "suspended: " ++ show r
+                return r
             Right r -> do
                 putStrLn $ "done: " ++ show r
-                return emptyJournal
+                return blank
 
     explicit = record $ do
          r <- record $ liftIO $ return 2

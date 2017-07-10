@@ -1,7 +1,7 @@
 {-# LANGUAGE GADTs                      #-}
 
 module Control.Monad.Trans.AutoLogged
-    ( AutoReplayT (..)
+    ( AutoRecorderT (R)
     , recorder
     )
 where
@@ -13,31 +13,31 @@ import Control.Monad.Trans.Replay
 -- Constrained monad allowing automatic logging in bind operation
 ------------------------------------------------------------------------------
 
-data AutoReplayT m a where
-    R  :: (Show a, Read a) => m a -> AutoReplayT m a
-    FMap   :: (a -> b) -> AutoReplayT m a -> AutoReplayT m b
-    Return :: a -> AutoReplayT m a
-    Apply  :: AutoReplayT m (a -> b) -> AutoReplayT m a -> AutoReplayT m b
-    Bind   :: AutoReplayT m a -> (a -> AutoReplayT m b) -> AutoReplayT m b
+data AutoRecorderT m a where
+    R  :: (Show a, Read a) => m a -> AutoRecorderT m a
+    FMap   :: (a -> b) -> AutoRecorderT m a -> AutoRecorderT m b
+    Return :: a -> AutoRecorderT m a
+    Apply  :: AutoRecorderT m (a -> b) -> AutoRecorderT m a -> AutoRecorderT m b
+    Bind   :: AutoRecorderT m a -> (a -> AutoRecorderT m b) -> AutoRecorderT m b
 
-instance Functor (AutoReplayT f) where
+instance Functor (AutoRecorderT f) where
     fmap = FMap
 
-instance Applicative (AutoReplayT f) where
+instance Applicative (AutoRecorderT f) where
     pure = Return
     (<*>) = Apply
 
-instance Monad (AutoReplayT m) where
+instance Monad (AutoRecorderT m) where
     return = Return
     (>>=) = Bind
 
 -- Only bind is logged, return is not logged
-bind :: (MonadReplay m, Read a, Show a)
+bind :: (MonadRecorder m, Read a, Show a)
     => m a -> (a -> m b) -> m b
 bind m f = record m >>= f
 
-recorder :: (MonadReplay m, MonadThrow m, Show a, Read a)
-    => AutoReplayT m a -> m a
+recorder :: (MonadRecorder m, MonadThrow m, Show a, Read a)
+    => AutoRecorderT m a -> m a
 
 recorder (R m) = m
 recorder (Return v) = return v
