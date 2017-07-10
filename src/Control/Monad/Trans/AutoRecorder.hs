@@ -1,5 +1,19 @@
 {-# LANGUAGE GADTs                      #-}
 
+-- |
+-- Module      : AutoRecorder
+-- Copyright   : (c) 2017 Harendra Kumar
+--
+-- License     : MIT-style
+-- Maintainer  : harendra.kumar@gmail.com
+-- Stability   : experimental
+-- Portability : GHC
+--
+-- Unlike 'RecorderT' which records selective operations using the 'record'
+-- combinator 'AutoRecorderT' monad enforces recording of all operations in the
+-- monad. This ensures that we do not miss recording any monadic operation that
+-- can cause problems on replay.
+
 module Control.Monad.Trans.AutoRecorder
     ( AutoRecorderT (R)
     , recorder
@@ -13,8 +27,10 @@ import Control.Monad.Trans.Recorder
 -- Constrained monad allowing automatic logging in bind operation
 ------------------------------------------------------------------------------
 
+-- | A monad that enforces recording of the results of all monadic actions.
+-- The constructor 'R' lifts a 'MonadRecorder' monad to 'AutoRecorderT'.
 data AutoRecorderT m a where
-    R  :: (Show a, Read a) => m a -> AutoRecorderT m a
+    R  :: (MonadRecorder m, Show a, Read a) => m a -> AutoRecorderT m a
     FMap   :: (a -> b) -> AutoRecorderT m a -> AutoRecorderT m b
     Return :: a -> AutoRecorderT m a
     Apply  :: AutoRecorderT m (a -> b) -> AutoRecorderT m a -> AutoRecorderT m b
@@ -36,6 +52,7 @@ bind :: (MonadRecorder m, Read a, Show a)
     => m a -> (a -> m b) -> m b
 bind m f = record m >>= f
 
+-- | Run the 'AutoRecorderT' monad recording all operations in it.
 recorder :: (MonadRecorder m, MonadThrow m, Show a, Read a)
     => AutoRecorderT m a -> m a
 
