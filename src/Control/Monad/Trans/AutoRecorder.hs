@@ -27,6 +27,10 @@ import Control.Monad.Trans.Recorder
 -- Constrained monad allowing automatic logging in bind operation
 ------------------------------------------------------------------------------
 
+-- TBD: implement MonadIO and MonadTrans instances so that we can just lift
+-- actions rather than using the "R" constructor. Use the constrained-normal
+-- package style implementation.
+--
 -- | A monad that enforces recording of the results of all monadic actions.
 -- The constructor 'R' lifts a 'MonadRecorder' monad to 'AutoRecorderT'.
 data AutoRecorderT m a where
