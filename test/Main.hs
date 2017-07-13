@@ -24,7 +24,7 @@ main = do
         return ()
 
     runOnce recording m = do
-        res <- try $ play recording m
+        res <- try $ runRecorderT recording m
         case res of
             Left (Paused r) -> do
                 putStrLn $ "suspended: " ++ show r

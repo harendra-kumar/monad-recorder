@@ -12,7 +12,7 @@
 -- Unlike 'RecorderT' which records selective operations using the 'record'
 -- combinator 'AutoRecorderT' monad enforces recording of all operations in the
 -- monad. This ensures that we do not miss recording any monadic operation that
--- can cause problems on replay.
+-- could cause problems on replay.
 
 module Control.Monad.Trans.AutoRecorder
     ( AutoRecorderT (R)

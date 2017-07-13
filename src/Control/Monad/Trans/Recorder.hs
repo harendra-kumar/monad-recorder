@@ -15,11 +15,12 @@
 -- Portability : GHC
 --
 -- Results of the 'RecorderT' computations are recorded in a running journal
--- using the 'record' combinator. A computation can be suspended at any point
--- using the 'pause' primitive returning the journal that can be used to
--- restart the computation from the same point later. When logs are replayed
--- using 'play', the 'record' combinator returns the previously recorded result
--- of the computation from the journal.
+-- using the 'record' combinator. A computation can be paused at any point
+-- using the 'pause' primitive returning a 'Recording' that can be used to
+-- restart the computation from the same point later. When the recording is
+-- replayed, the 'record' combinator returns the previously recorded result of
+-- the computation from the journal instead of actually running the
+-- computation.
 --
 -- Note that only those computations are replayed that are explicitly recorded.
 -- Unrecorded impure computations can result in the program misbehaving if it
@@ -28,10 +29,10 @@
 -- module.
 
 module Control.Monad.Trans.Recorder
-    ( RecorderT (..)
+    ( RecorderT
     , Journal
     , MonadRecorder (..)
-    , play
+    , runRecorderT
     , Recordable (..)
     , Recording
     , blank
@@ -42,6 +43,7 @@ module Control.Monad.Trans.Recorder
 where
 
 import           Control.Exception           (Exception)
+import           Control.Monad               (when)
 import           Control.Monad.Base          (MonadBase)
 import           Control.Monad.Catch         (MonadCatch, MonadMask, MonadThrow,
                                               throwM)
@@ -116,18 +118,35 @@ instance MonadBaseControl b m => MonadBaseControl b (RecorderT m) where
 
 -- | A monad with the ability to record and play the results of monadic actions.
 class Monad m => MonadRecorder m where
+    -- Note: we cannot have the "record" function here as it requires (Show a,
+    -- Read a) constraint.
     getJournal :: m Journal
+    -- ^ Retrieve the record and replay journal. Used by the implementation of
+    -- 'record' and 'play'.
     putJournal :: Journal -> m ()
+    -- ^ Replace the record and replay journal. Used by the implementation of
+    -- 'record' and 'play'.
+
+    -- TBD create recording based on play points. Each play starts a new
+    -- recording. There could be nested plays starting a nested recording.
+    play :: Recording -> m ()
+    -- ^ Play a previously recorded journal. This function can be used to set a
+    -- replay journal at any point.
 
 instance Monad m => MonadRecorder (RecorderT m) where
     getJournal = RecorderT $ get
     putJournal logs = RecorderT $ put logs
+    play (Recording entries) = do
+        Journal recordings replay <- getJournal
+        when (recordings /= [] || replay /= []) $
+            error "The journal must be empty when a play is initiated"
+        putJournal $ Journal [] (reverse entries)
 
 ------------------------------------------------------------------------------
 -- Logging
 ------------------------------------------------------------------------------
 
--- | Add the result of an action to the running log journal.  When replaying,
+-- | Add the result of an action to the recording journal.  During replay,
 -- if the result of an action is available in the replay journal then get it
 -- from the journal instead of running the action.
 record :: (Recordable a, Read a, Show a, MonadRecorder m) => m a -> m a
@@ -166,7 +185,7 @@ record m = do
 data Paused = Paused Recording deriving Show
 instance Exception Paused
 
--- | Pause a computation before completion for resuming later using 'play'.
+-- | Pause a computation before completion for resuming later.
 -- Throws 'Paused' exception which carries the current recorded logs.
 pause :: (MonadRecorder m, MonadThrow m) => m ()
 pause = do
@@ -189,9 +208,9 @@ pause = do
 ------------------------------------------------------------------------------
 
 -- | Run a fresh 'RecorderT' computation using 'blank' recording or resume a
--- paused computation using captured recording.  The previous state of the
--- action is restored and the action resumes after the 'pause' call that paused
--- the action.
-play :: Monad m => Recording -> RecorderT m a -> m a
-play (Recording entries) m =
+-- paused computation using captured recording.  The captured state of the
+-- action is restored and the action resumes right after the 'pause' call that
+-- paused the action.
+runRecorderT :: Monad m => Recording -> RecorderT m a -> m a
+runRecorderT (Recording entries) m =
     runStateT (unRecorderT m) (Journal [] (reverse entries)) >>= return . fst
