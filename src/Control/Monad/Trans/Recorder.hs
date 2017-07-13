@@ -20,7 +20,28 @@
 -- restart the computation from the same point later. When the recording is
 -- replayed, the 'record' combinator returns the previously recorded result of
 -- the computation from the journal instead of actually running the
--- computation.
+-- computation again.
+--
+-- @
+-- import Control.Monad.IO.Class (liftIO)
+-- import Control.Monad.Trans.Recorder (runRecorderT, record, pause, Paused(..), blank)
+-- import Control.Exception (catch)
+--
+-- main = do
+--     recording <- \(runRecorderT blank computation \>\> return blank) \`catch\` \\(Paused r) -\> return r
+--     putStrLn "Computation paused, resuming again with recorded logs"
+--     runRecorderT recording computation
+--     return ()
+--
+--     where
+--
+--     computation = do
+--          x1 <- record $ liftIO $ return 1
+--          record $ liftIO $ print (\"A", x1)
+--          x2 <- record $ liftIO $ return 2
+--          record pause
+--          record $ liftIO $ print (\"B", x1, x2)
+-- @
 --
 -- Note that only those computations are replayed that are explicitly recorded.
 -- Unrecorded impure computations can result in the program misbehaving if it
