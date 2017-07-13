@@ -13,6 +13,28 @@
 -- combinator 'AutoRecorderT' monad enforces recording of all operations in the
 -- monad. This ensures that we do not miss recording any monadic operation that
 -- could cause problems on replay.
+--
+-- @
+-- import Control.Monad.IO.Class (liftIO)
+-- import Control.Monad.Trans.Recorder (runRecorderT, record, pause, Paused(..), blank)
+-- import Control.Monad.Trans.AutoRecorder (recorder, AutoRecorderT(R))
+-- import Control.Exception (catch)
+--
+-- main = do
+--     recording <- \(runRecorderT blank computation \>\> return blank) \`catch\` \\(Paused r) -\> return r
+--     putStrLn "Computation paused, resuming again with recorded logs"
+--     runRecorderT recording computation
+--     return ()
+--
+--     where
+--
+--     computation = recorder $ do
+--          x1 <- R $ liftIO $ return 1
+--          R $ liftIO $ print (\"A", x1)
+--          x2 <- R $ liftIO $ return 2
+--          R pause
+--          R $ liftIO $ print (\"B", x1, x2)
+-- @
 
 module Control.Monad.Trans.AutoRecorder
     ( AutoRecorderT (R)
