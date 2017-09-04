@@ -1,5 +1,6 @@
 # Monad Recorder
 
+[![Hackage](https://img.shields.io/hackage/v/monad-recorder.svg?style=flat)](https://hackage.haskell.org/package/monad-recorder)
 [![Build Status](https://travis-ci.org/harendra-kumar/monad-recorder.svg?branch=master)](https://travis-ci.org/harendra-kumar/monad-recorder)
 [![Windows Build status](https://ci.appveyor.com/api/projects/status/nag8lvguh5upe540?svg=true)](https://ci.appveyor.com/project/harendra-kumar/monad-recorder)
 [![Coverage Status](https://coveralls.io/repos/harendra-kumar/monad-recorder/badge.svg?branch=master&service=github)](https://coveralls.io/github/harendra-kumar/monad-recorder?branch=master)
