@@ -34,21 +34,21 @@ main = do
                 return blank
 
     explicit = record $ do
-         r <- record $ liftIO $ return 2
+         r <- record $ liftIO $ return (2 :: Int)
          record $ liftIO $ print ("A",r)
          record pause
          record $ liftIO $ print ("B",r)
-         x <- liftIO $ return 3
+         x <- liftIO $ return (3 :: Int)
          record pause
          liftIO $ print ("C", r, x)
 
     auto = do
         recorder $ do
-            r <- return 2
+            r <- return (2 :: Int)
             R $ liftIO $ print ("A",r)
             R $ pause
             R $ liftIO $ print ("B",r)
-            x <- return 3
+            x <- return (3 :: Int)
             R $ pause
             R $ liftIO $ print ("C", r, x)
         record $ liftIO $ print ("X")
